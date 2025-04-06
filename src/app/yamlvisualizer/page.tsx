@@ -1,153 +1,128 @@
 'use client';
 
-import React, { useState } from "react";
-import Draggable from "react-draggable";
-import { ResizableBox } from "react-resizable";
-import "react-resizable/css/styles.css";
+import React, { useState, useEffect, useRef } from "react";
+import StickyNote from "./components/StickyNote";
+import { Note, CanvasDimensions, CanvasSettings, CanvasPromptElement } from "./types";
+import { generateYaml } from "./utils/yamlGenerator";
+import { NoteFactory } from "./utils/noteFactory";
 
-// 付箋ノートの型定義
-interface CharacterDetails {
-    gender: string;
-    age: string;
-}
-
-interface Note {
-    id: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    type: string;
-    content: string;
-    characterDetails?: CharacterDetails;
-}
-
-// PropsとEventの型定義
-interface StickyNoteProps {
-    note: Note;
-    updateNote: (id: number, updatedProperties: Partial<Note>) => void;
-}
-
-const StickyNote = ({ note, updateNote }: StickyNoteProps) => {
-    const draggableRef = React.useRef<HTMLDivElement>(null); // Draggable用の参照を定義
-    const [type, setType] = useState(note.type || "plain");
-    const [content, setContent] = useState(note.content || "");
-    const [characterDetails, setCharacterDetails] = useState<CharacterDetails>(
-        note.characterDetails || { gender: "", age: "" }
-    );
-
-    // 付箋属性の変更
-    const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const newType = e.target.value;
-        setType(newType);
-        updateNote(note.id, { type: newType });
-    };
-
-    // プレーンテキスト入力の変更
-    const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setContent(e.target.value);
-        updateNote(note.id, { content: e.target.value });
-    };
-
-    // キャラクター用詳細情報の変更
-    const handleCharacterDetailChange = (field: keyof CharacterDetails, value: string) => {
-        const newDetails = { ...characterDetails, [field]: value };
-        setCharacterDetails(newDetails);
-        updateNote(note.id, { characterDetails: newDetails });
-    };
-
-    return (
-        <Draggable
-            nodeRef={draggableRef}
-            cancel=".react-resizable-handle"
-            position={{ x: note.x, y: note.y }}
-            onStop={(_e, data) => updateNote(note.id, { x: data.x, y: data.y })}
-        >
-            <div ref={draggableRef}>
-                <ResizableBox
-                    width={note.width}
-                    height={note.height}
-                    onResizeStop={(_e, { size }) =>
-                        updateNote(note.id, {
-                            width: size.width,
-                            height: size.height,
-                        })
-                    }
-                    minConstraints={[150, 150]}
-                    resizeHandles={["se"]}
-                >
-                    <div
-                        className="border border-gray-300 bg-sticky-yellow p-2.5 h-full box-border text-black"
-                        style={{ height: '100%' }}
-                    >
-                        <select
-                            value={type}
-                            onChange={handleTypeChange}
-                            className="w-full mb-2 text-black bg-white border border-gray-300 rounded p-1"
-                        >
-                            <option value="plain">プレーンテキスト</option>
-                            <option value="character">キャラクター</option>
-                            <option value="place">場所</option>
-                        </select>
-                        {/* キャラクター選択の場合は追加フォームを表示 */}
-                        {type === "character" && (
-                            <div className="space-y-2">
-                                <input
-                                    type="text"
-                                    placeholder="性別"
-                                    value={characterDetails.gender}
-                                    onChange={(e) =>
-                                        handleCharacterDetailChange(
-                                            "gender",
-                                            e.target.value
-                                        )
-                                    }
-                                    className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
-                                />
-                                <input
-                                    type="text"
-                                    placeholder="年齢"
-                                    value={characterDetails.age}
-                                    onChange={(e) =>
-                                        handleCharacterDetailChange(
-                                            "age",
-                                            e.target.value
-                                        )
-                                    }
-                                    className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
-                                />
-                            </div>
-                        )}
-                        {/* 常に表示されるプレーンテキスト入力欄 */}
-                        <textarea
-                            placeholder="プロンプト内容を入力"
-                            value={content}
-                            onChange={handleContentChange}
-                            className="w-full h-12 text-black bg-white border border-gray-300 rounded p-1 mt-2"
-                        />
-                    </div>
-                </ResizableBox>
-            </div>
-        </Draggable>
-    );
-};
-
+/**
+ * YAMLビジュアルエディタのメインコンポーネント
+ * ドラッグ＆ドロップ可能な付箋を配置し、YAMLとして出力する
+ */
 const VisualYamlEditor = () => {
+    // 付箋ノートの状態管理
     const [notes, setNotes] = useState<Note[]>([
-        {
-            id: 1,
-            x: 50,
-            y: 50,
-            width: 250,
-            height: 150,
-            type: "plain",
-            content: "例: 青い空と緑の草原",
-        },
+        // NoteFactoryを使用して初期付箋を作成
+        NoteFactory.createNote("plain", 1, 50, 50, 250, 150, "例: 青い空と緑の草原")
     ]);
+
+    // キャンバスのサイズ設定
     const [aspectRatio, setAspectRatio] = useState("16:9");
     const [customSize, setCustomSize] = useState({ width: 800, height: 450 });
+    const [canvasDimensions, setCanvasDimensions] = useState<CanvasDimensions>({ width: 800, height: 450 });
+    const [canvasSettings, setCanvasSettings] = useState<CanvasSettings>({
+        aspectRatio: "16:9",
+        width: 800,
+        height: 450,
+        promptElements: [] // キャンバス全体のプロンプト要素を初期化
+    });
+    const canvasContainerRef = useRef<HTMLDivElement>(null);
 
-    // 付箋更新関数
+    // プロンプト要素カテゴリのオプション
+    const promptElementCategories = [
+        { value: "style", label: "画風/様式" },
+        { value: "mood", label: "雰囲気" },
+        { value: "lighting", label: "照明" },
+        { value: "color", label: "色調" },
+        { value: "camera", label: "カメラアングル" },
+        { value: "time", label: "時間帯" },
+        { value: "season", label: "季節" },
+        { value: "weather", label: "天候" },
+        { value: "theme", label: "テーマ" }
+    ];
+
+    // 新しいプロンプト要素の状態管理
+    const [newPromptElement, setNewPromptElement] = useState({
+        category: promptElementCategories[0].value,
+        value: ""
+    });
+
+    /**
+     * アスペクト比に基づいてキャンバスサイズを計算する
+     */
+    useEffect(() => {
+        if (!canvasContainerRef.current) return;
+
+        const containerWidth = canvasContainerRef.current.clientWidth;
+        const containerHeight = canvasContainerRef.current.clientHeight;
+        let canvasWidth, canvasHeight;
+
+        if (aspectRatio === "custom") {
+            canvasWidth = customSize.width;
+            canvasHeight = customSize.height;
+        } else {
+            const [widthRatio, heightRatio] = aspectRatio.split(":").map(Number);
+
+            // コンテナ内に収まる最大のサイズを計算（パディングの考慮）
+            const maxWidth = containerWidth - 40; // パディング余裕
+            const maxHeight = containerHeight - 100; // ツールバー+パディング
+
+            // アスペクト比を維持しながら最大サイズに合わせる
+            if (maxWidth / widthRatio < maxHeight / heightRatio) {
+                canvasWidth = maxWidth;
+                canvasHeight = (maxWidth / widthRatio) * heightRatio;
+            } else {
+                canvasHeight = maxHeight;
+                canvasWidth = (maxHeight / heightRatio) * widthRatio;
+            }
+        }
+
+        setCanvasDimensions({ width: canvasWidth, height: canvasHeight });
+
+        // キャンバス設定情報を更新
+        setCanvasSettings(prev => ({
+            ...prev,
+            aspectRatio,
+            width: canvasWidth,
+            height: canvasHeight,
+            ...(aspectRatio === "custom" ? {
+                customWidth: customSize.width,
+                customHeight: customSize.height
+            } : {})
+        }));
+
+        // 付箋がキャンバス外にある場合、キャンバス内に移動させる
+        setNotes((prevNotes) =>
+            prevNotes.map(note => {
+                let updatedNote = { ...note };
+                if (note.x + note.width > canvasWidth) {
+                    updatedNote.x = canvasWidth - note.width;
+                }
+                if (note.y + note.height > canvasHeight) {
+                    updatedNote.y = canvasHeight - note.height;
+                }
+                return updatedNote;
+            })
+        );
+    }, [aspectRatio, customSize, canvasContainerRef.current]);
+
+    // ウィンドウリサイズ時にキャンバスサイズを再計算
+    useEffect(() => {
+        const handleResize = () => {
+            // アスペクト比の変更をトリガーしてキャンバスリサイズを実行
+            setAspectRatio(prev => prev);
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    /**
+     * 付箋ノートを更新する関数
+     * @param id 更新対象の付箋ID
+     * @param updatedProperties 更新するプロパティ
+     */
     const updateNote = (id: number, updatedProperties: Partial<Note>) => {
         setNotes((prevNotes) =>
             prevNotes.map((note) =>
@@ -156,45 +131,63 @@ const VisualYamlEditor = () => {
         );
     };
 
-    // YAML を生成（付箋の位置、大きさ、内容を反映）
-    const generateYaml = () => {
-        let yaml = "elements:\n";
-        notes.forEach((note) => {
-            yaml += `  - id: ${note.id}\n`;
-            yaml += `    type: ${note.type}\n`;
-            yaml += `    position: { x: ${note.x}, y: ${note.y} }\n`;
-            yaml += `    size: { width: ${note.width}, height: ${note.height} }\n`;
-            yaml += `    content: "${note.content}"\n`;
-            if (note.type === "character" && note.characterDetails) {
-                yaml += `    characterDetails:\n`;
-                yaml += `      gender: "${note.characterDetails.gender || ""}"\n`;
-                yaml += `      age: "${note.characterDetails.age || ""}"\n`;
-            }
-        });
-        return yaml;
+    /**
+     * 新しい付箋を追加する関数
+     * @param type 付箋タイプ（デフォルトは"plain"）
+     */
+    const addNewNote = (type: string = "plain") => {
+        const newId = Math.max(0, ...notes.map(note => note.id)) + 1;
+        // NoteFactoryを使用して適切なタイプの付箋を生成
+        const newNote = NoteFactory.createNote(type, newId);
+        setNotes([...notes, newNote]);
     };
 
-    // 新しい付箋を追加する関数
-    const addNewNote = () => {
-        const newId = Math.max(0, ...notes.map(note => note.id)) + 1;
-        setNotes([
-            ...notes,
-            {
-                id: newId,
-                x: 100,
-                y: 100,
-                width: 250,
-                height: 150,
-                type: "plain",
-                content: "",
-            }
-        ]);
+    /**
+     * 新しいプロンプト要素を追加する関数
+     */
+    const addPromptElement = () => {
+        if (!newPromptElement.value.trim()) return; // 空の値は追加しない
+
+        const newElement: CanvasPromptElement = {
+            id: `prompt-${Date.now()}`, // ユニークIDを生成
+            category: newPromptElement.category,
+            value: newPromptElement.value.trim()
+        };
+
+        // 既存のプロンプト要素に新しい要素を追加
+        setCanvasSettings(prev => ({
+            ...prev,
+            promptElements: [...(prev.promptElements || []), newElement]
+        }));
+
+        // 入力フォームをリセット（カテゴリはそのままで値のみクリア）
+        setNewPromptElement(prev => ({ ...prev, value: "" }));
+    };
+
+    /**
+     * プロンプト要素を削除する関数
+     * @param id 削除する要素のID
+     */
+    const removePromptElement = (id: string) => {
+        setCanvasSettings(prev => ({
+            ...prev,
+            promptElements: (prev.promptElements || []).filter(elem => elem.id !== id)
+        }));
+    };
+
+    // プルダウンで選択したカテゴリの表示名を取得する関数
+    const getCategoryLabel = (categoryValue: string): string => {
+        const category = promptElementCategories.find(cat => cat.value === categoryValue);
+        return category ? category.label : categoryValue;
     };
 
     return (
         <div className="flex h-screen">
             {/* キャンバスエリア */}
-            <div className="flex-grow-2 relative bg-gray-100">
+            <div
+                className="flex-grow-2 relative bg-gray-100 flex flex-col"
+                ref={canvasContainerRef}
+            >
                 {/* ツールバー：アスペクト比設定 */}
                 <div className="p-2.5 bg-gray-300 flex items-center">
                     <label className="mr-2 text-black">
@@ -238,26 +231,120 @@ const VisualYamlEditor = () => {
                             />
                         </span>
                     )}
-                    <button
-                        onClick={addNewNote}
-                        className="ml-auto bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded"
-                    >
-                        新規付箋追加
-                    </button>
+                    <div className="ml-auto flex">
+                        <div className="dropdown mr-2">
+                            <button
+                                className="bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded flex items-center"
+                            >
+                                新規付箋追加 <span className="ml-1">▼</span>
+                            </button>
+                            <div className="dropdown-content absolute bg-white mt-1 shadow-lg rounded border border-gray-200 hidden">
+                                <button onClick={() => addNewNote("plain")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">プレーンテキスト</button>
+                                <button onClick={() => addNewNote("character")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">キャラクター</button>
+                                <button onClick={() => addNewNote("place")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">場所</button>
+                                <button onClick={() => addNewNote("event")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">イベント</button>
+                                <button onClick={() => addNewNote("item")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">アイテム</button>
+                                <button onClick={() => addNewNote("emotion")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">感情</button>
+                                <button onClick={() => addNewNote("memo")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">メモ</button>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => addNewNote()}
+                            className="bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded"
+                        >
+                            付箋追加
+                        </button>
+                    </div>
                 </div>
-                {/* キャンバス上の付箋 */}
-                {notes.map((note) => (
-                    <StickyNote
-                        key={note.id}
-                        note={note}
-                        updateNote={updateNote}
-                    />
-                ))}
+
+                {/* キャンバス全体のプロンプト設定セクション */}
+                <div className="p-2.5 bg-gray-200 border-t border-gray-300">
+                    <h3 className="text-sm font-medium text-black mb-2">キャンバス全体の設定</h3>
+
+                    {/* プロンプト要素追加フォーム */}
+                    <div className="flex items-center mb-2">
+                        <select
+                            value={newPromptElement.category}
+                            onChange={(e) => setNewPromptElement({
+                                ...newPromptElement,
+                                category: e.target.value
+                            })}
+                            className="mr-2 text-black bg-white border border-gray-300 rounded p-1"
+                        >
+                            {promptElementCategories.map(category => (
+                                <option key={category.value} value={category.value}>
+                                    {category.label}
+                                </option>
+                            ))}
+                        </select>
+                        <input
+                            type="text"
+                            placeholder={`${getCategoryLabel(newPromptElement.category)}を入力...`}
+                            value={newPromptElement.value}
+                            onChange={(e) => setNewPromptElement({
+                                ...newPromptElement,
+                                value: e.target.value
+                            })}
+                            className="flex-grow text-black bg-white border border-gray-300 rounded p-1 mr-2"
+                        />
+                        <button
+                            onClick={addPromptElement}
+                            className="bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded"
+                            disabled={!newPromptElement.value.trim()}
+                        >
+                            追加
+                        </button>
+                    </div>
+
+                    {/* 追加されたプロンプト要素のリスト */}
+                    <div className="flex flex-wrap gap-2">
+                        {canvasSettings.promptElements && canvasSettings.promptElements.map(element => (
+                            <div key={element.id} className="flex items-center bg-white border border-gray-300 rounded py-1 px-2">
+                                <span className="text-xs font-medium text-gray-500 mr-1">
+                                    {getCategoryLabel(element.category)}:
+                                </span>
+                                <span className="text-sm text-black">{element.value}</span>
+                                <button
+                                    onClick={() => removePromptElement(element.id)}
+                                    className="ml-2 text-red-500 hover:text-red-700"
+                                    title="削除"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        ))}
+                        {(!canvasSettings.promptElements || canvasSettings.promptElements.length === 0) && (
+                            <span className="text-sm text-gray-500 italic">設定なし - 上のフォームから要素を追加してください</span>
+                        )}
+                    </div>
+                </div>
+
+                {/* キャンバス枠 - アスペクト比に合わせた表示 */}
+                <div className="flex-grow flex items-center justify-center p-5">
+                    <div
+                        className="relative border-2 border-blue-500 bg-white shadow-md"
+                        style={{
+                            width: `${canvasDimensions.width}px`,
+                            height: `${canvasDimensions.height}px`,
+                        }}
+                    >
+                        {/* キャンバス上の付箋 */}
+                        {notes.map((note) => (
+                            <StickyNote
+                                key={note.id}
+                                note={note}
+                                updateNote={updateNote}
+                                canvasDimensions={canvasDimensions}
+                            />
+                        ))}
+                    </div>
+                </div>
             </div>
+
             {/* YAML プレビューエリア */}
             <div className="flex-grow-1 bg-white border-l border-gray-300 p-2.5 overflow-auto">
                 <h2 className="text-xl font-bold mb-2 text-black">YAML Preview</h2>
-                <pre className="bg-gray-50 p-2 rounded border border-gray-200 text-black">{generateYaml()}</pre>
+                <pre className="bg-gray-50 p-2 rounded border border-gray-200 text-black">{generateYaml(notes, canvasSettings)}</pre>
             </div>
         </div>
     );

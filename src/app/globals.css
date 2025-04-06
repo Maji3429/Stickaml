@@ -52,3 +52,18 @@ option {
 .flex-grow-2 {
   flex: 2;
 }
+
+/* ドロップダウンメニューのスタイル */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+.dropdown-content {
+  z-index: 1000;
+  min-width: 160px;
+}
