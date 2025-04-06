@@ -1,4 +1,4 @@
-![Stickaml](./assets/images/top_image.png)
+![Stickaml](./assets/images/top_image.jpg)
 # Stickaml
 
 [![Next.js](https://img.shields.io/badge/Next.js-15.2.4-black?logo=next.js)](https://nextjs.org/)
