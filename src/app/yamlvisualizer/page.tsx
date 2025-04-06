@@ -95,7 +95,7 @@ const VisualYamlEditor = () => {
         // 付箋がキャンバス外にある場合、キャンバス内に移動させる
         setNotes((prevNotes) =>
             prevNotes.map(note => {
-                let updatedNote = { ...note };
+                const updatedNote = { ...note };
                 if (note.x + note.width > canvasWidth) {
                     updatedNote.x = canvasWidth - note.width;
                 }
@@ -105,7 +105,7 @@ const VisualYamlEditor = () => {
                 return updatedNote;
             })
         );
-    }, [aspectRatio, customSize, canvasContainerRef.current]);
+    }, [aspectRatio, customSize]);
 
     // ウィンドウリサイズ時にキャンバスサイズを再計算
     useEffect(() => {
@@ -185,7 +185,7 @@ const VisualYamlEditor = () => {
         <div className="flex h-screen">
             {/* キャンバスエリア */}
             <div
-                className="flex-grow-2 relative bg-gray-100 flex flex-col"
+                className="relative flex flex-col bg-gray-100 flex-grow-2"
                 ref={canvasContainerRef}
             >
                 {/* ツールバー：アスペクト比設定 */}
@@ -195,7 +195,7 @@ const VisualYamlEditor = () => {
                         <select
                             value={aspectRatio}
                             onChange={(e) => setAspectRatio(e.target.value)}
-                            className="ml-2 text-black bg-white border border-gray-300 rounded p-1"
+                            className="p-1 ml-2 text-black bg-white border border-gray-300 rounded"
                         >
                             <option value="16:9">16:9</option>
                             <option value="4:3">4:3</option>
@@ -215,7 +215,7 @@ const VisualYamlEditor = () => {
                                         width: Number(e.target.value),
                                     })
                                 }
-                                className="w-20 ml-2 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-20 p-1 ml-2 text-black bg-white border border-gray-300 rounded"
                             />
                             <input
                                 type="number"
@@ -227,30 +227,30 @@ const VisualYamlEditor = () => {
                                         height: Number(e.target.value),
                                     })
                                 }
-                                className="w-20 ml-2 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-20 p-1 ml-2 text-black bg-white border border-gray-300 rounded"
                             />
                         </span>
                     )}
-                    <div className="ml-auto flex">
-                        <div className="dropdown mr-2">
+                    <div className="flex ml-auto">
+                        <div className="mr-2 dropdown">
                             <button
-                                className="bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded flex items-center"
+                                className="flex items-center px-3 py-1 text-white bg-blue-500 rounded hover:bg-blue-600"
                             >
                                 新規付箋追加 <span className="ml-1">▼</span>
                             </button>
-                            <div className="dropdown-content absolute bg-white mt-1 shadow-lg rounded border border-gray-200 hidden">
-                                <button onClick={() => addNewNote("plain")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">プレーンテキスト</button>
-                                <button onClick={() => addNewNote("character")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">キャラクター</button>
-                                <button onClick={() => addNewNote("place")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">場所</button>
-                                <button onClick={() => addNewNote("event")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">イベント</button>
-                                <button onClick={() => addNewNote("item")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">アイテム</button>
-                                <button onClick={() => addNewNote("emotion")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">感情</button>
-                                <button onClick={() => addNewNote("memo")} className="block px-4 py-2 text-left w-full hover:bg-gray-100">メモ</button>
+                            <div className="absolute hidden mt-1 bg-white border border-gray-200 rounded shadow-lg dropdown-content">
+                                <button onClick={() => addNewNote("plain")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">プレーンテキスト</button>
+                                <button onClick={() => addNewNote("character")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">キャラクター</button>
+                                <button onClick={() => addNewNote("place")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">場所</button>
+                                <button onClick={() => addNewNote("event")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">イベント</button>
+                                <button onClick={() => addNewNote("item")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">アイテム</button>
+                                <button onClick={() => addNewNote("emotion")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">感情</button>
+                                <button onClick={() => addNewNote("memo")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">メモ</button>
                             </div>
                         </div>
                         <button
                             onClick={() => addNewNote()}
-                            className="bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded"
+                            className="px-3 py-1 text-white bg-blue-500 rounded hover:bg-blue-600"
                         >
                             付箋追加
                         </button>
@@ -259,7 +259,7 @@ const VisualYamlEditor = () => {
 
                 {/* キャンバス全体のプロンプト設定セクション */}
                 <div className="p-2.5 bg-gray-200 border-t border-gray-300">
-                    <h3 className="text-sm font-medium text-black mb-2">キャンバス全体の設定</h3>
+                    <h3 className="mb-2 text-sm font-medium text-black">キャンバス全体の設定</h3>
 
                     {/* プロンプト要素追加フォーム */}
                     <div className="flex items-center mb-2">
@@ -269,7 +269,7 @@ const VisualYamlEditor = () => {
                                 ...newPromptElement,
                                 category: e.target.value
                             })}
-                            className="mr-2 text-black bg-white border border-gray-300 rounded p-1"
+                            className="p-1 mr-2 text-black bg-white border border-gray-300 rounded"
                         >
                             {promptElementCategories.map(category => (
                                 <option key={category.value} value={category.value}>
@@ -285,11 +285,11 @@ const VisualYamlEditor = () => {
                                 ...newPromptElement,
                                 value: e.target.value
                             })}
-                            className="flex-grow text-black bg-white border border-gray-300 rounded p-1 mr-2"
+                            className="flex-grow p-1 mr-2 text-black bg-white border border-gray-300 rounded"
                         />
                         <button
                             onClick={addPromptElement}
-                            className="bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded"
+                            className="px-3 py-1 text-white bg-green-500 rounded hover:bg-green-600"
                             disabled={!newPromptElement.value.trim()}
                         >
                             追加
@@ -299,8 +299,8 @@ const VisualYamlEditor = () => {
                     {/* 追加されたプロンプト要素のリスト */}
                     <div className="flex flex-wrap gap-2">
                         {canvasSettings.promptElements && canvasSettings.promptElements.map(element => (
-                            <div key={element.id} className="flex items-center bg-white border border-gray-300 rounded py-1 px-2">
-                                <span className="text-xs font-medium text-gray-500 mr-1">
+                            <div key={element.id} className="flex items-center px-2 py-1 bg-white border border-gray-300 rounded">
+                                <span className="mr-1 text-xs font-medium text-gray-500">
                                     {getCategoryLabel(element.category)}:
                                 </span>
                                 <span className="text-sm text-black">{element.value}</span>
@@ -314,15 +314,15 @@ const VisualYamlEditor = () => {
                             </div>
                         ))}
                         {(!canvasSettings.promptElements || canvasSettings.promptElements.length === 0) && (
-                            <span className="text-sm text-gray-500 italic">設定なし - 上のフォームから要素を追加してください</span>
+                            <span className="text-sm italic text-gray-500">設定なし - 上のフォームから要素を追加してください</span>
                         )}
                     </div>
                 </div>
 
                 {/* キャンバス枠 - アスペクト比に合わせた表示 */}
-                <div className="flex-grow flex items-center justify-center p-5">
+                <div className="flex items-center justify-center flex-grow p-5">
                     <div
-                        className="relative border-2 border-blue-500 bg-white shadow-md"
+                        className="relative bg-white border-2 border-blue-500 shadow-md"
                         style={{
                             width: `${canvasDimensions.width}px`,
                             height: `${canvasDimensions.height}px`,
@@ -343,8 +343,8 @@ const VisualYamlEditor = () => {
 
             {/* YAML プレビューエリア */}
             <div className="flex-grow-1 bg-white border-l border-gray-300 p-2.5 overflow-auto">
-                <h2 className="text-xl font-bold mb-2 text-black">YAML Preview</h2>
-                <pre className="bg-gray-50 p-2 rounded border border-gray-200 text-black">{generateYaml(notes, canvasSettings)}</pre>
+                <h2 className="mb-2 text-xl font-bold text-black font-jp">YAML Preview</h2>
+                <pre className="p-2 text-black border border-gray-200 rounded bg-gray-50 yaml-preview">{generateYaml(notes, canvasSettings)}</pre>
             </div>
         </div>
     );
