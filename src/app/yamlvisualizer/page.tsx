@@ -28,6 +28,8 @@ const VisualYamlEditor = () => {
         promptElements: [] // キャンバス全体のプロンプト要素を初期化
     });
     const canvasContainerRef = useRef<HTMLDivElement>(null);
+    // クリップボードのコピー状態管理
+    const [copySuccess, setCopySuccess] = useState<boolean | null>(null);
 
     // プロンプト要素カテゴリのオプション
     const promptElementCategories = [
@@ -181,6 +183,33 @@ const VisualYamlEditor = () => {
         return category ? category.label : categoryValue;
     };
 
+    /**
+     * YAMLテキストをクリップボードにコピーする関数
+     */
+    const copyToClipboard = () => {
+        try {
+            // YAMLテキストを生成
+            const yamlText = generateYaml(notes, canvasSettings);
+            // クリップボードAPIを使用してテキストをコピー
+            navigator.clipboard.writeText(yamlText)
+                .then(() => {
+                    // コピー成功時の処理
+                    setCopySuccess(true);
+                    // 3秒後にコピー成功表示をリセット
+                    setTimeout(() => setCopySuccess(null), 3000);
+                })
+                .catch((error) => {
+                    console.error("クリップボードへのコピーに失敗しました:", error);
+                    setCopySuccess(false);
+                    setTimeout(() => setCopySuccess(null), 3000);
+                });
+        } catch (error) {
+            console.error("YAML生成中にエラーが発生しました:", error);
+            setCopySuccess(false);
+            setTimeout(() => setCopySuccess(null), 3000);
+        }
+    };
+
     return (
         <div className="flex h-screen">
             {/* キャンバスエリア */}
@@ -240,7 +269,7 @@ const VisualYamlEditor = () => {
                             </button>
                             <div className="absolute hidden mt-1 bg-white border border-gray-200 rounded shadow-lg dropdown-content">
                                 <button onClick={() => addNewNote("plain")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">プレーンテキスト</button>
-                                <button onClick={() => addNewNote("character")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">キャラクター</button>
+                                <button onClick={() => addNewNote("character")} className="block w-full px-2 px-4 text-left text-black hover:bg-gray-100">キャラクター</button>
                                 <button onClick={() => addNewNote("place")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">場所</button>
                                 <button onClick={() => addNewNote("event")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">イベント</button>
                                 <button onClick={() => addNewNote("item")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">アイテム</button>
@@ -343,7 +372,31 @@ const VisualYamlEditor = () => {
 
             {/* YAML プレビューエリア */}
             <div className="flex-grow-1 bg-white border-l border-gray-300 p-2.5 overflow-auto">
-                <h2 className="mb-2 text-xl font-bold text-black font-jp">YAML Preview</h2>
+                <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-xl font-bold text-black font-jp">YAML Preview</h2>
+                    <div className="flex items-center">
+                        <button
+                            onClick={copyToClipboard}
+                            className="flex items-center px-3 py-1 text-white bg-green-500 rounded hover:bg-green-600"
+                            title="YAMLをクリップボードにコピー"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                            コピー
+                        </button>
+                        {copySuccess === true && (
+                            <span className="ml-2 text-sm text-green-600">
+                                ✓ コピーしました
+                            </span>
+                        )}
+                        {copySuccess === false && (
+                            <span className="ml-2 text-sm text-red-600">
+                                ✗ コピーに失敗しました
+                            </span>
+                        )}
+                    </div>
+                </div>
                 <pre className="p-2 text-black border border-gray-200 rounded bg-gray-50 yaml-preview">{generateYaml(notes, canvasSettings)}</pre>
             </div>
         </div>
