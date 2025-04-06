@@ -94,7 +94,7 @@ bun dev
 
 ## ライセンス
 
-[MIT](https://choosealicense.com/licenses/mit/)
+[MIT](./LICENSE)
 
 ## 開発者
 
