@@ -16,7 +16,7 @@ import {
  * 付箋ノートを表示するドラッガブルなコンポーネント
  * @param props StickyNoteProps - note情報と更新関数、キャンバス寸法
  */
-const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => {
+const StickyNote = ({ note, updateNote, canvasDimensions, onDelete, onDuplicate }: StickyNoteProps) => {
     const [type, setType] = useState(note.type || "plain");
     const [content, setContent] = useState(note.content || "");
 
@@ -61,6 +61,7 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
         };
 
         updateDetailsByType();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [type]);
 
     // 付箋属性の変更
@@ -127,13 +128,26 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
     // 付箋タイプに基づいて背景色を決定する関数
     const getNoteBackgroundColor = () => {
         switch (type) {
-            case "character": return "bg-blue-100";
-            case "place": return "bg-green-100";
-            case "event": return "bg-purple-100";
-            case "item": return "bg-yellow-100";
-            case "emotion": return "bg-pink-100";
-            case "memo": return "bg-gray-100";
-            default: return "bg-sticky-yellow";
+            case "character": return "bg-gradient-to-br from-blue-100 to-blue-200";
+            case "place": return "bg-gradient-to-br from-green-100 to-green-200";
+            case "event": return "bg-gradient-to-br from-purple-100 to-purple-200";
+            case "item": return "bg-gradient-to-br from-yellow-100 to-yellow-200";
+            case "emotion": return "bg-gradient-to-br from-pink-100 to-pink-200";
+            case "memo": return "bg-gradient-to-br from-gray-100 to-gray-200";
+            default: return "bg-gradient-to-br from-yellow-50 to-yellow-100";
+        }
+    };
+    
+    // 付箋タイプに応じたアイコンを取得
+    const getNoteIcon = () => {
+        switch (type) {
+            case "character": return "👤";
+            case "place": return "📍";
+            case "event": return "⚡";
+            case "item": return "🎁";
+            case "emotion": return "💭";
+            case "memo": return "📋";
+            default: return "📝";
         }
     };
 
@@ -165,26 +179,52 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                 ]}
             >
                 <div
-                    className={`border border-gray-300 p-2.5 h-full box-border text-black ${getNoteBackgroundColor()}`}
+                    className={`border-2 border-gray-300 p-3 h-full box-border text-black ${getNoteBackgroundColor()} rounded-lg shadow-lg hover:shadow-xl transition-all sticky-note-enter`}
                     style={{ height: '100%' }}
                 >
-                    <div className="sticky-note-header flex justify-between mb-2">
-                        <select
-                            value={type}
-                            onChange={handleTypeChange}
-                            className="w-full text-black bg-white border border-gray-300 rounded p-1"
-                        >
-                            <option value="plain">プレーンテキスト</option>
-                            <option value="character">キャラクター</option>
-                            <option value="place">場所</option>
-                            <option value="event">イベント</option>
-                            <option value="item">アイテム</option>
-                            <option value="emotion">感情</option>
-                            <option value="memo">メモ</option>
-                        </select>
-                        <div
-                            className="ml-2 cursor-move drag-handle p-1 bg-gray-200 rounded"
-                            onMouseDown={(e) => {
+                    <div className="sticky-note-header flex justify-between items-start mb-2 gap-2">
+                        <div className="flex items-center space-x-2 flex-1">
+                            <span className="text-lg">{getNoteIcon()}</span>
+                            <select
+                                value={type}
+                                onChange={handleTypeChange}
+                                className="flex-1 text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-lg p-1.5 font-medium shadow-sm hover:bg-white transition-all focus:ring-2 focus:ring-purple-300"
+                            >
+                                <option value="plain">プレーンテキスト</option>
+                                <option value="character">キャラクター</option>
+                                <option value="place">場所</option>
+                                <option value="event">イベント</option>
+                                <option value="item">アイテム</option>
+                                <option value="emotion">感情</option>
+                                <option value="memo">メモ</option>
+                            </select>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                            {onDuplicate && (
+                                <button
+                                    onClick={() => onDuplicate(note.id)}
+                                    className="p-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition-all shadow-sm"
+                                    title="複製"
+                                >
+                                    📋
+                                </button>
+                            )}
+                            {onDelete && (
+                                <button
+                                    onClick={() => {
+                                        if (confirm('この付箋を削除してもよろしいですか？')) {
+                                            onDelete(note.id);
+                                        }
+                                    }}
+                                    className="p-1.5 bg-red-500 text-white rounded hover:bg-red-600 transition-all shadow-sm"
+                                    title="削除"
+                                >
+                                    🗑️
+                                </button>
+                            )}
+                            <div
+                                className="cursor-move drag-handle p-1.5 bg-gray-700 text-white rounded hover:bg-gray-800 transition-all shadow-sm font-bold"
+                                onMouseDown={(e) => {
                                 e.preventDefault(); // テキスト選択を防止
                                 const startPos = { x: e.clientX, y: e.clientY };
                                 const startNotePos = { x: note.x, y: note.y };
@@ -210,8 +250,10 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                                 document.addEventListener('mousemove', handleMouseMove);
                                 document.addEventListener('mouseup', handleMouseUp);
                             }}
+                            title="ドラッグして移動"
                         >
-                            ≡
+                            ⋮⋮
+                        </div>
                         </div>
                     </div>
 
@@ -228,7 +270,7 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                                         e.target.value
                                     )
                                 }
-                                className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-full mb-1 text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-blue-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-300 transition-all"
                             />
                             <input
                                 type="text"
@@ -240,7 +282,7 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                                         e.target.value
                                     )
                                 }
-                                className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-full mb-1 text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-blue-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-300 transition-all"
                             />
                         </div>
                     )}
@@ -258,7 +300,7 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                                         e.target.value
                                     )
                                 }
-                                className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-full mb-1 text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-300 transition-all"
                             />
                             <input
                                 type="text"
@@ -270,7 +312,7 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                                         e.target.value
                                     )
                                 }
-                                className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-full mb-1 text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-300 transition-all"
                             />
                         </div>
                     )}
@@ -288,7 +330,7 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                                         e.target.value
                                     )
                                 }
-                                className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-full mb-1 text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-300 transition-all"
                             />
                             <select
                                 value={eventDetails.importance}
@@ -298,7 +340,7 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                                         e.target.value
                                     )
                                 }
-                                className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-full mb-1 text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-300 transition-all"
                             >
                                 <option value="">重要度を選択</option>
                                 <option value="high">高 (メインイベント)</option>
@@ -321,7 +363,7 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                                         e.target.value
                                     )
                                 }
-                                className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-full mb-1 text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-300 transition-all"
                             />
                             <select
                                 value={itemDetails.importance}
@@ -331,7 +373,7 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                                         e.target.value
                                     )
                                 }
-                                className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-full mb-1 text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-300 transition-all"
                             >
                                 <option value="">重要度を選択</option>
                                 <option value="key">重要アイテム</option>
@@ -352,7 +394,7 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                                         e.target.value
                                     )
                                 }
-                                className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-full mb-1 text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-300 transition-all"
                             >
                                 <option value="">強度を選択</option>
                                 <option value="strong">強</option>
@@ -369,17 +411,17 @@ const StickyNote = ({ note, updateNote, canvasDimensions }: StickyNoteProps) => 
                                         e.target.value
                                     )
                                 }
-                                className="w-full mb-1 text-black bg-white border border-gray-300 rounded p-1"
+                                className="w-full mb-1 text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-purple-300 transition-all"
                             />
                         </div>
                     )}
 
                     {/* 常に表示されるプレーンテキスト入力欄 */}
                     <textarea
-                        placeholder="プロンプト内容を入力"
+                        placeholder="プロンプト内容を入力..."
                         value={content}
                         onChange={handleContentChange}
-                        className="w-full h-12 text-black bg-white border border-gray-300 rounded p-1 mt-2"
+                        className="w-full text-sm text-black bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-lg p-2 mt-2 focus:ring-2 focus:ring-purple-300 transition-all resize-none"
                         style={{
                             height: type === "plain" || type === "memo" ? "80%" : "40%"
                         }}

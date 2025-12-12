@@ -94,4 +94,6 @@ export interface StickyNoteProps {
     note: Note;
     updateNote: (id: number, updatedProperties: Partial<Note>) => void;
     canvasDimensions: CanvasDimensions; // キャンバスの寸法情報を追加
+    onDelete?: (id: number) => void; // 削除コールバック
+    onDuplicate?: (id: number) => void; // 複製コールバック
 }

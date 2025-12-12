@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import StickyNote from "./components/StickyNote";
 import { Note, CanvasDimensions, CanvasSettings, CanvasPromptElement } from "./types";
 import { generateYaml } from "./utils/yamlGenerator";
@@ -28,8 +28,17 @@ const VisualYamlEditor = () => {
         promptElements: [] // キャンバス全体のプロンプト要素を初期化
     });
     const canvasContainerRef = useRef<HTMLDivElement>(null);
-    // クリップボードのコピー状態管理
-    const [copySuccess, setCopySuccess] = useState<boolean | null>(null);
+    
+    // Undo/Redo functionality
+    const [history, setHistory] = useState<Note[][]>([[...notes]]);
+    const [historyIndex, setHistoryIndex] = useState(0);
+    
+    // Selected notes for multi-select
+    const [selectedNotes, setSelectedNotes] = useState<number[]>([]);
+    
+    // Toast notifications
+    const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
 
     // プロンプト要素カテゴリのオプション
     const promptElementCategories = [
@@ -141,8 +150,156 @@ const VisualYamlEditor = () => {
         const newId = Math.max(0, ...notes.map(note => note.id)) + 1;
         // NoteFactoryを使用して適切なタイプの付箋を生成
         const newNote = NoteFactory.createNote(type, newId);
-        setNotes([...notes, newNote]);
+        const newNotes = [...notes, newNote];
+        setNotes(newNotes);
+        addToHistory(newNotes);
+        showToast('付箋を追加しました', 'success');
     };
+    
+    /**
+     * 付箋を削除する関数
+     * @param id 削除する付箋のID
+     */
+    const deleteNote = (id: number) => {
+        const newNotes = notes.filter(note => note.id !== id);
+        setNotes(newNotes);
+        addToHistory(newNotes);
+        showToast('付箋を削除しました', 'success');
+    };
+    
+    /**
+     * 付箋を複製する関数
+     * @param id 複製する付箋のID
+     */
+    const duplicateNote = (id: number) => {
+        const noteToDuplicate = notes.find(note => note.id === id);
+        if (!noteToDuplicate) return;
+        
+        const newId = Math.max(0, ...notes.map(note => note.id)) + 1;
+        const duplicatedNote = {
+            ...noteToDuplicate,
+            id: newId,
+            x: noteToDuplicate.x + 20,
+            y: noteToDuplicate.y + 20
+        };
+        const newNotes = [...notes, duplicatedNote];
+        setNotes(newNotes);
+        addToHistory(newNotes);
+        showToast('付箋を複製しました', 'success');
+    };
+    
+    /**
+     * 履歴に追加する関数
+     */
+    const addToHistory = (newNotes: Note[]) => {
+        const newHistory = history.slice(0, historyIndex + 1);
+        newHistory.push([...newNotes]);
+        setHistory(newHistory);
+        setHistoryIndex(newHistory.length - 1);
+    };
+    
+    /**
+     * Undo機能
+     */
+    const undo = () => {
+        if (historyIndex > 0) {
+            setHistoryIndex(historyIndex - 1);
+            setNotes([...history[historyIndex - 1]]);
+            showToast('元に戻しました', 'info');
+        }
+    };
+    
+    /**
+     * Redo機能
+     */
+    const redo = () => {
+        if (historyIndex < history.length - 1) {
+            setHistoryIndex(historyIndex + 1);
+            setNotes([...history[historyIndex + 1]]);
+            showToast('やり直しました', 'info');
+        }
+    };
+    
+    /**
+     * Toast通知を表示する関数
+     */
+    const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+        setToastMessage(message);
+        setToastType(type);
+        setTimeout(() => setToastMessage(null), 3000);
+    }, []);
+    
+    /**
+     * キーボードショートカット
+     */
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ctrl+Z or Cmd+Z for undo
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                if (historyIndex > 0) {
+                    setHistoryIndex(historyIndex - 1);
+                    setNotes([...history[historyIndex - 1]]);
+                    showToast('元に戻しました', 'info');
+                }
+            }
+            // Ctrl+Y or Cmd+Shift+Z for redo
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+                e.preventDefault();
+                if (historyIndex < history.length - 1) {
+                    setHistoryIndex(historyIndex + 1);
+                    setNotes([...history[historyIndex + 1]]);
+                    showToast('やり直しました', 'info');
+                }
+            }
+            // Delete key to delete selected notes
+            if (e.key === 'Delete' && selectedNotes.length > 0) {
+                e.preventDefault();
+                const newNotes = notes.filter(note => !selectedNotes.includes(note.id));
+                setNotes(newNotes);
+                const newHistory = history.slice(0, historyIndex + 1);
+                newHistory.push([...newNotes]);
+                setHistory(newHistory);
+                setHistoryIndex(newHistory.length - 1);
+                setSelectedNotes([]);
+                showToast(`${selectedNotes.length}個の付箋を削除しました`, 'success');
+            }
+        };
+        
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [historyIndex, history, selectedNotes, notes, showToast]);
+    
+    /**
+     * LocalStorageに自動保存
+     */
+    useEffect(() => {
+        const saveData = {
+            notes,
+            canvasSettings,
+            aspectRatio,
+            customSize
+        };
+        localStorage.setItem('yamlVisualizer', JSON.stringify(saveData));
+    }, [notes, canvasSettings, aspectRatio, customSize]);
+    
+    /**
+     * LocalStorageから読み込み
+     */
+    useEffect(() => {
+        const savedData = localStorage.getItem('yamlVisualizer');
+        if (savedData) {
+            try {
+                const parsed = JSON.parse(savedData);
+                if (parsed.notes) setNotes(parsed.notes);
+                if (parsed.canvasSettings) setCanvasSettings(parsed.canvasSettings);
+                if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio);
+                if (parsed.customSize) setCustomSize(parsed.customSize);
+            } catch (e) {
+                console.error('Failed to load saved data:', e);
+            }
+        }
+    }, []);
 
     /**
      * 新しいプロンプト要素を追加する関数
@@ -194,111 +351,200 @@ const VisualYamlEditor = () => {
             navigator.clipboard.writeText(yamlText)
                 .then(() => {
                     // コピー成功時の処理
-                    setCopySuccess(true);
-                    // 3秒後にコピー成功表示をリセット
-                    setTimeout(() => setCopySuccess(null), 3000);
+                    showToast('YAMLをクリップボードにコピーしました', 'success');
                 })
                 .catch((error) => {
                     console.error("クリップボードへのコピーに失敗しました:", error);
-                    setCopySuccess(false);
-                    setTimeout(() => setCopySuccess(null), 3000);
+                    showToast('コピーに失敗しました', 'error');
                 });
         } catch (error) {
             console.error("YAML生成中にエラーが発生しました:", error);
-            setCopySuccess(false);
-            setTimeout(() => setCopySuccess(null), 3000);
+            showToast('YAML生成中にエラーが発生しました', 'error');
+        }
+    };
+    
+    /**
+     * YAMLをファイルとしてダウンロード
+     */
+    const downloadYaml = () => {
+        try {
+            const yamlText = generateYaml(notes, canvasSettings);
+            const blob = new Blob([yamlText], { type: 'text/yaml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `prompt-${Date.now()}.yaml`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('YAMLファイルをダウンロードしました', 'success');
+        } catch (error) {
+            console.error('Download failed:', error);
+            showToast('ダウンロードに失敗しました', 'error');
+        }
+    };
+    
+    /**
+     * すべての付箋をクリア
+     */
+    const clearAllNotes = () => {
+        if (notes.length === 0) return;
+        if (confirm(`すべての付箋(${notes.length}個)を削除してもよろしいですか？`)) {
+            setNotes([]);
+            addToHistory([]);
+            showToast('すべての付箋を削除しました', 'success');
         }
     };
 
     return (
-        <div className="flex h-screen">
+        <div className="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+            {/* Toast Notification */}
+            {toastMessage && (
+                <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg toast-notification ${
+                    toastType === 'success' ? 'bg-green-500' : 
+                    toastType === 'error' ? 'bg-red-500' : 'bg-blue-500'
+                } text-white font-medium`}>
+                    {toastMessage}
+                </div>
+            )}
+            
             {/* キャンバスエリア */}
             <div
-                className="relative flex flex-col bg-gray-100 flex-grow-2"
+                className="relative flex flex-col flex-grow-2"
                 ref={canvasContainerRef}
             >
-                {/* ツールバー：アスペクト比設定 */}
-                <div className="p-2.5 bg-gray-300 flex items-center">
-                    <label className="mr-2 text-black">
-                        アスペクト比:
-                        <select
-                            value={aspectRatio}
-                            onChange={(e) => setAspectRatio(e.target.value)}
-                            className="p-1 ml-2 text-black bg-white border border-gray-300 rounded"
-                        >
-                            <option value="16:9">16:9</option>
-                            <option value="4:3">4:3</option>
-                            <option value="1:1">1:1</option>
-                            <option value="custom">カスタム</option>
-                        </select>
-                    </label>
-                    {aspectRatio === "custom" && (
-                        <span className="flex items-center">
-                            <input
-                                type="number"
-                                placeholder="幅(px)"
-                                value={customSize.width}
-                                onChange={(e) =>
-                                    setCustomSize({
-                                        ...customSize,
-                                        width: Number(e.target.value),
-                                    })
-                                }
-                                className="w-20 p-1 ml-2 text-black bg-white border border-gray-300 rounded"
-                            />
-                            <input
-                                type="number"
-                                placeholder="高さ(px)"
-                                value={customSize.height}
-                                onChange={(e) =>
-                                    setCustomSize({
-                                        ...customSize,
-                                        height: Number(e.target.value),
-                                    })
-                                }
-                                className="w-20 p-1 ml-2 text-black bg-white border border-gray-300 rounded"
-                            />
-                        </span>
-                    )}
-                    <div className="flex ml-auto">
-                        <div className="mr-2 dropdown">
-                            <button
-                                className="flex items-center px-3 py-1 text-white bg-blue-500 rounded hover:bg-blue-600"
-                            >
-                                新規付箋追加 <span className="ml-1">▼</span>
-                            </button>
-                            <div className="absolute hidden mt-1 bg-white border border-gray-200 rounded shadow-lg dropdown-content">
-                                <button onClick={() => addNewNote("plain")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">プレーンテキスト</button>
-                                <button onClick={() => addNewNote("character")} className="block w-full px-2 px-4 text-left text-black hover:bg-gray-100">キャラクター</button>
-                                <button onClick={() => addNewNote("place")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">場所</button>
-                                <button onClick={() => addNewNote("event")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">イベント</button>
-                                <button onClick={() => addNewNote("item")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">アイテム</button>
-                                <button onClick={() => addNewNote("emotion")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">感情</button>
-                                <button onClick={() => addNewNote("memo")} className="block w-full px-4 py-2 text-left text-black hover:bg-gray-100">メモ</button>
+                {/* Enhanced ツールバー */}
+                <div className="p-3 bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg">
+                    <div className="flex items-center justify-between">
+                        {/* Left section - Canvas settings */}
+                        <div className="flex items-center space-x-4">
+                            <div className="flex items-center space-x-2">
+                                <span className="text-white font-medium">🎨</span>
+                                <label className="text-white font-medium">
+                                    アスペクト比:
+                                    <select
+                                        value={aspectRatio}
+                                        onChange={(e) => setAspectRatio(e.target.value)}
+                                        className="p-2 ml-2 text-black bg-white border-2 border-white/30 rounded-lg focus:ring-2 focus:ring-purple-300 transition-all"
+                                    >
+                                        <option value="16:9">16:9 (ワイド)</option>
+                                        <option value="4:3">4:3 (標準)</option>
+                                        <option value="1:1">1:1 (正方形)</option>
+                                        <option value="custom">カスタム</option>
+                                    </select>
+                                </label>
+                                {aspectRatio === "custom" && (
+                                    <div className="flex items-center space-x-2">
+                                        <input
+                                            type="number"
+                                            placeholder="幅"
+                                            value={customSize.width}
+                                            onChange={(e) =>
+                                                setCustomSize({
+                                                    ...customSize,
+                                                    width: Number(e.target.value),
+                                                })
+                                            }
+                                            className="w-24 p-2 text-black bg-white border-2 border-white/30 rounded-lg focus:ring-2 focus:ring-purple-300"
+                                        />
+                                        <span className="text-white">×</span>
+                                        <input
+                                            type="number"
+                                            placeholder="高さ"
+                                            value={customSize.height}
+                                            onChange={(e) =>
+                                                setCustomSize({
+                                                    ...customSize,
+                                                    height: Number(e.target.value),
+                                                })
+                                            }
+                                            className="w-24 p-2 text-black bg-white border-2 border-white/30 rounded-lg focus:ring-2 focus:ring-purple-300"
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        <button
-                            onClick={() => addNewNote()}
-                            className="px-3 py-1 text-white bg-blue-500 rounded hover:bg-blue-600"
-                        >
-                            付箋追加
-                        </button>
+                        
+                        {/* Right section - Actions */}
+                        <div className="flex items-center space-x-2">
+                            {/* Undo/Redo buttons */}
+                            <div className="flex space-x-1 bg-white/10 rounded-lg p-1">
+                                <button
+                                    onClick={undo}
+                                    disabled={historyIndex <= 0}
+                                    className="px-3 py-2 text-white rounded disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/20 transition-all"
+                                    title="元に戻す (Ctrl+Z)"
+                                >
+                                    ↶
+                                </button>
+                                <button
+                                    onClick={redo}
+                                    disabled={historyIndex >= history.length - 1}
+                                    className="px-3 py-2 text-white rounded disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/20 transition-all"
+                                    title="やり直し (Ctrl+Y)"
+                                >
+                                    ↷
+                                </button>
+                            </div>
+                            
+                            {/* Clear all button */}
+                            <button
+                                onClick={clearAllNotes}
+                                disabled={notes.length === 0}
+                                className="px-4 py-2 text-white bg-red-500/80 rounded-lg hover:bg-red-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-medium shadow-md"
+                                title="すべての付箋を削除"
+                            >
+                                🗑️ クリア
+                            </button>
+                            
+                            {/* Add note dropdown */}
+                            <div className="dropdown">
+                                <button
+                                    className="flex items-center space-x-2 px-4 py-2 text-white bg-white/20 rounded-lg hover:bg-white/30 transition-all font-medium shadow-md backdrop-blur-sm"
+                                >
+                                    <span>➕ 新規付箋</span>
+                                    <span>▼</span>
+                                </button>
+                                <div className="absolute hidden mt-2 bg-white border-2 border-purple-200 rounded-lg shadow-xl dropdown-content min-w-[200px] overflow-hidden">
+                                    <button onClick={() => addNewNote("plain")} className="block w-full px-4 py-3 text-left text-black hover:bg-purple-50 transition-colors border-b border-gray-100">📝 プレーンテキスト</button>
+                                    <button onClick={() => addNewNote("character")} className="block w-full px-4 py-3 text-left text-black hover:bg-blue-50 transition-colors border-b border-gray-100">👤 キャラクター</button>
+                                    <button onClick={() => addNewNote("place")} className="block w-full px-4 py-3 text-left text-black hover:bg-green-50 transition-colors border-b border-gray-100">📍 場所</button>
+                                    <button onClick={() => addNewNote("event")} className="block w-full px-4 py-3 text-left text-black hover:bg-purple-50 transition-colors border-b border-gray-100">⚡ イベント</button>
+                                    <button onClick={() => addNewNote("item")} className="block w-full px-4 py-3 text-left text-black hover:bg-yellow-50 transition-colors border-b border-gray-100">🎁 アイテム</button>
+                                    <button onClick={() => addNewNote("emotion")} className="block w-full px-4 py-3 text-left text-black hover:bg-pink-50 transition-colors border-b border-gray-100">💭 感情</button>
+                                    <button onClick={() => addNewNote("memo")} className="block w-full px-4 py-3 text-left text-black hover:bg-gray-50 transition-colors">📋 メモ</button>
+                                </div>
+                            </div>
+                            
+                            {/* Quick add button */}
+                            <button
+                                onClick={() => addNewNote()}
+                                className="px-4 py-2 text-white btn-gradient-success rounded-lg font-medium shadow-md"
+                                title="プレーン付箋を追加"
+                            >
+                                ➕ 付箋追加
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                {/* キャンバス全体のプロンプト設定セクション */}
-                <div className="p-2.5 bg-gray-200 border-t border-gray-300">
-                    <h3 className="mb-2 text-sm font-medium text-black">キャンバス全体の設定</h3>
+                {/* Enhanced キャンバス全体のプロンプト設定セクション */}
+                <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border-b-2 border-purple-200 shadow-sm">
+                    <div className="flex items-center mb-3">
+                        <span className="text-lg mr-2">⚙️</span>
+                        <h3 className="text-base font-bold text-gray-800">キャンバス全体の設定</h3>
+                    </div>
 
                     {/* プロンプト要素追加フォーム */}
-                    <div className="flex items-center mb-2">
+                    <div className="flex items-center mb-3 space-x-2">
                         <select
                             value={newPromptElement.category}
                             onChange={(e) => setNewPromptElement({
                                 ...newPromptElement,
                                 category: e.target.value
                             })}
-                            className="p-1 mr-2 text-black bg-white border border-gray-300 rounded"
+                            className="p-2 text-black bg-white border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all shadow-sm"
                         >
                             {promptElementCategories.map(category => (
                                 <option key={category.value} value={category.value}>
@@ -314,90 +560,146 @@ const VisualYamlEditor = () => {
                                 ...newPromptElement,
                                 value: e.target.value
                             })}
-                            className="flex-grow p-1 mr-2 text-black bg-white border border-gray-300 rounded"
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter' && newPromptElement.value.trim()) {
+                                    addPromptElement();
+                                }
+                            }}
+                            className="flex-grow p-2 text-black bg-white border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all shadow-sm"
                         />
                         <button
                             onClick={addPromptElement}
-                            className="px-3 py-1 text-white bg-green-500 rounded hover:bg-green-600"
+                            className="px-5 py-2 text-white btn-gradient-primary rounded-lg font-medium shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={!newPromptElement.value.trim()}
                         >
-                            追加
+                            ➕ 追加
                         </button>
                     </div>
 
                     {/* 追加されたプロンプト要素のリスト */}
                     <div className="flex flex-wrap gap-2">
-                        {canvasSettings.promptElements && canvasSettings.promptElements.map(element => (
-                            <div key={element.id} className="flex items-center px-2 py-1 bg-white border border-gray-300 rounded">
-                                <span className="mr-1 text-xs font-medium text-gray-500">
-                                    {getCategoryLabel(element.category)}:
-                                </span>
-                                <span className="text-sm text-black">{element.value}</span>
-                                <button
-                                    onClick={() => removePromptElement(element.id)}
-                                    className="ml-2 text-red-500 hover:text-red-700"
-                                    title="削除"
-                                >
-                                    ×
-                                </button>
+                        {canvasSettings.promptElements && canvasSettings.promptElements.length > 0 ? (
+                            canvasSettings.promptElements.map(element => (
+                                <div key={element.id} className="flex items-center px-3 py-2 bg-white border-2 border-purple-200 rounded-full shadow-sm hover:shadow-md transition-all group">
+                                    <span className="mr-2 text-xs font-bold text-purple-600 uppercase">
+                                        {getCategoryLabel(element.category)}
+                                    </span>
+                                    <span className="text-sm text-gray-700 font-medium">{element.value}</span>
+                                    <button
+                                        onClick={() => removePromptElement(element.id)}
+                                        className="ml-3 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full w-6 h-6 flex items-center justify-center transition-all opacity-70 group-hover:opacity-100"
+                                        title="削除"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="w-full text-center py-4 px-6 bg-white/50 rounded-lg border-2 border-dashed border-purple-200">
+                                <span className="text-sm text-gray-500">💡 上のフォームから画風や雰囲気などの要素を追加できます</span>
                             </div>
-                        ))}
-                        {(!canvasSettings.promptElements || canvasSettings.promptElements.length === 0) && (
-                            <span className="text-sm italic text-gray-500">設定なし - 上のフォームから要素を追加してください</span>
                         )}
                     </div>
                 </div>
 
-                {/* キャンバス枠 - アスペクト比に合わせた表示 */}
-                <div className="flex items-center justify-center flex-grow p-5">
+                {/* Enhanced キャンバス枠 */}
+                <div className="flex items-center justify-center flex-grow p-6 bg-gradient-to-br from-gray-50 to-gray-100">
                     <div
-                        className="relative bg-white border-2 border-blue-500 shadow-md"
+                        className="relative bg-white rounded-xl shadow-2xl border-4 border-purple-200"
                         style={{
                             width: `${canvasDimensions.width}px`,
                             height: `${canvasDimensions.height}px`,
                         }}
                     >
+                        {/* Canvas info overlay */}
+                        <div className="absolute top-2 right-2 px-3 py-1 bg-black/10 backdrop-blur-sm rounded-lg text-xs text-gray-600 font-medium">
+                            {canvasDimensions.width} × {canvasDimensions.height} px | {notes.length} 付箋
+                        </div>
+                        
                         {/* キャンバス上の付箋 */}
                         {notes.map((note) => (
                             <StickyNote
                                 key={note.id}
                                 note={note}
-                                updateNote={updateNote}
+                                updateNote={(id, props) => {
+                                    updateNote(id, props);
+                                    const newNotes = notes.map(n => n.id === id ? { ...n, ...props } : n);
+                                    addToHistory(newNotes);
+                                }}
                                 canvasDimensions={canvasDimensions}
+                                onDelete={deleteNote}
+                                onDuplicate={duplicateNote}
                             />
                         ))}
+                        
+                        {/* Empty state */}
+                        {notes.length === 0 && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="text-center p-8 bg-purple-50 rounded-2xl border-2 border-dashed border-purple-200">
+                                    <div className="text-6xl mb-4">📝</div>
+                                    <h3 className="text-xl font-bold text-gray-700 mb-2">付箋を追加して始めましょう</h3>
+                                    <p className="text-gray-500 text-sm">上部の「➕ 付箋追加」ボタンをクリックしてください</p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* YAML プレビューエリア */}
-            <div className="flex-grow-1 bg-white border-l border-gray-300 p-2.5 overflow-auto">
-                <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-xl font-bold text-black font-jp">YAML Preview</h2>
-                    <div className="flex items-center">
+            {/* Enhanced YAML プレビューエリア */}
+            <div className="flex-grow-1 bg-white border-l-4 border-purple-200 flex flex-col shadow-xl">
+                <div className="p-4 bg-gradient-to-r from-purple-50 to-indigo-50 border-b-2 border-purple-200">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                            <span className="text-2xl">📄</span>
+                            <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
+                                YAML Preview
+                            </h2>
+                        </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
                         <button
                             onClick={copyToClipboard}
-                            className="flex items-center px-3 py-1 text-white bg-green-500 rounded hover:bg-green-600"
+                            className="flex items-center space-x-2 px-4 py-2 text-white btn-gradient-success rounded-lg font-medium shadow-md flex-1"
                             title="YAMLをクリップボードにコピー"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                             </svg>
-                            コピー
+                            <span>コピー</span>
                         </button>
-                        {copySuccess === true && (
-                            <span className="ml-2 text-sm text-green-600">
-                                ✓ コピーしました
-                            </span>
-                        )}
-                        {copySuccess === false && (
-                            <span className="ml-2 text-sm text-red-600">
-                                ✗ コピーに失敗しました
-                            </span>
-                        )}
+                        <button
+                            onClick={downloadYaml}
+                            className="flex items-center space-x-2 px-4 py-2 text-white btn-gradient-primary rounded-lg font-medium shadow-md flex-1"
+                            title="YAMLファイルをダウンロード"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            <span>保存</span>
+                        </button>
                     </div>
                 </div>
-                <pre className="p-2 text-black border border-gray-200 rounded bg-gray-50 yaml-preview">{generateYaml(notes, canvasSettings)}</pre>
+                <div className="flex-1 overflow-auto p-4 bg-gray-50">
+                    <pre className="p-4 text-sm text-gray-800 border-2 border-purple-100 rounded-xl bg-white shadow-inner yaml-preview font-mono leading-relaxed whitespace-pre-wrap break-words">
+                        {generateYaml(notes, canvasSettings)}
+                    </pre>
+                </div>
+                
+                {/* Help section */}
+                <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 border-t-2 border-purple-200">
+                    <details className="cursor-pointer">
+                        <summary className="font-bold text-gray-700 mb-2 flex items-center space-x-2">
+                            <span>💡</span>
+                            <span>ショートカットキー</span>
+                        </summary>
+                        <div className="mt-3 space-y-1 text-sm text-gray-600 ml-6">
+                            <div><kbd className="px-2 py-1 bg-white rounded border border-gray-300 text-xs font-mono">Ctrl+Z</kbd> - 元に戻す</div>
+                            <div><kbd className="px-2 py-1 bg-white rounded border border-gray-300 text-xs font-mono">Ctrl+Y</kbd> - やり直し</div>
+                            <div><kbd className="px-2 py-1 bg-white rounded border border-gray-300 text-xs font-mono">Delete</kbd> - 選択した付箋を削除</div>
+                        </div>
+                    </details>
+                </div>
             </div>
         </div>
     );
