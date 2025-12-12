@@ -30,8 +30,8 @@ const VisualYamlEditor = () => {
     const canvasContainerRef = useRef<HTMLDivElement>(null);
     
     // Undo/Redo functionality
-    const [history, setHistory] = useState<Note[][]>([[...notes]]);
-    const [historyIndex, setHistoryIndex] = useState(0);
+    const [history, setHistory] = useState<Note[][]>([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
     
     // Selected notes for multi-select
     const [selectedNotes, setSelectedNotes] = useState<number[]>([]);
@@ -130,17 +130,38 @@ const VisualYamlEditor = () => {
     }, []);
 
     /**
+     * Toast通知を表示する関数
+     */
+    const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+        setToastMessage(message);
+        setToastType(type);
+        setTimeout(() => setToastMessage(null), 3000);
+    }, []);
+    
+    /**
+     * 履歴に追加する関数
+     */
+    const addToHistory = useCallback((newNotes: Note[]) => {
+        setHistory(prev => {
+            const newHistory = prev.slice(0, historyIndex + 1);
+            newHistory.push([...newNotes]);
+            return newHistory;
+        });
+        setHistoryIndex(prev => prev + 1);
+    }, [historyIndex]);
+
+    /**
      * 付箋ノートを更新する関数
      * @param id 更新対象の付箋ID
      * @param updatedProperties 更新するプロパティ
      */
-    const updateNote = (id: number, updatedProperties: Partial<Note>) => {
+    const updateNote = useCallback((id: number, updatedProperties: Partial<Note>) => {
         setNotes((prevNotes) =>
             prevNotes.map((note) =>
                 note.id === id ? { ...note, ...updatedProperties } : note
             )
         );
-    };
+    }, []);
 
     /**
      * 新しい付箋を追加する関数
@@ -189,45 +210,26 @@ const VisualYamlEditor = () => {
     };
     
     /**
-     * 履歴に追加する関数
-     */
-    const addToHistory = (newNotes: Note[]) => {
-        const newHistory = history.slice(0, historyIndex + 1);
-        newHistory.push([...newNotes]);
-        setHistory(newHistory);
-        setHistoryIndex(newHistory.length - 1);
-    };
-    
-    /**
      * Undo機能
      */
-    const undo = () => {
+    const undo = useCallback(() => {
         if (historyIndex > 0) {
             setHistoryIndex(historyIndex - 1);
             setNotes([...history[historyIndex - 1]]);
             showToast('元に戻しました', 'info');
         }
-    };
+    }, [historyIndex, history, showToast]);
     
     /**
      * Redo機能
      */
-    const redo = () => {
+    const redo = useCallback(() => {
         if (historyIndex < history.length - 1) {
             setHistoryIndex(historyIndex + 1);
             setNotes([...history[historyIndex + 1]]);
             showToast('やり直しました', 'info');
         }
-    };
-    
-    /**
-     * Toast通知を表示する関数
-     */
-    const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
-        setToastMessage(message);
-        setToastType(type);
-        setTimeout(() => setToastMessage(null), 3000);
-    }, []);
+    }, [historyIndex, history, showToast]);
     
     /**
      * キーボードショートカット
@@ -237,30 +239,19 @@ const VisualYamlEditor = () => {
             // Ctrl+Z or Cmd+Z for undo
             if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
                 e.preventDefault();
-                if (historyIndex > 0) {
-                    setHistoryIndex(historyIndex - 1);
-                    setNotes([...history[historyIndex - 1]]);
-                    showToast('元に戻しました', 'info');
-                }
+                undo();
             }
             // Ctrl+Y or Cmd+Shift+Z for redo
             if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
                 e.preventDefault();
-                if (historyIndex < history.length - 1) {
-                    setHistoryIndex(historyIndex + 1);
-                    setNotes([...history[historyIndex + 1]]);
-                    showToast('やり直しました', 'info');
-                }
+                redo();
             }
             // Delete key to delete selected notes
             if (e.key === 'Delete' && selectedNotes.length > 0) {
                 e.preventDefault();
                 const newNotes = notes.filter(note => !selectedNotes.includes(note.id));
                 setNotes(newNotes);
-                const newHistory = history.slice(0, historyIndex + 1);
-                newHistory.push([...newNotes]);
-                setHistory(newHistory);
-                setHistoryIndex(newHistory.length - 1);
+                addToHistory(newNotes);
                 setSelectedNotes([]);
                 showToast(`${selectedNotes.length}個の付箋を削除しました`, 'success');
             }
@@ -268,7 +259,7 @@ const VisualYamlEditor = () => {
         
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [historyIndex, history, selectedNotes, notes, showToast]);
+    }, [undo, redo, selectedNotes, notes, addToHistory, showToast]);
     
     /**
      * LocalStorageに自動保存
@@ -291,14 +282,23 @@ const VisualYamlEditor = () => {
         if (savedData) {
             try {
                 const parsed = JSON.parse(savedData);
-                if (parsed.notes) setNotes(parsed.notes);
+                if (parsed.notes) {
+                    setNotes(parsed.notes);
+                    setHistory([[...parsed.notes]]);
+                    setHistoryIndex(0);
+                }
                 if (parsed.canvasSettings) setCanvasSettings(parsed.canvasSettings);
                 if (parsed.aspectRatio) setAspectRatio(parsed.aspectRatio);
                 if (parsed.customSize) setCustomSize(parsed.customSize);
             } catch (e) {
                 console.error('Failed to load saved data:', e);
             }
+        } else {
+            // Initialize history with default notes
+            setHistory([[...notes]]);
+            setHistoryIndex(0);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     /**
@@ -621,11 +621,7 @@ const VisualYamlEditor = () => {
                             <StickyNote
                                 key={note.id}
                                 note={note}
-                                updateNote={(id, props) => {
-                                    updateNote(id, props);
-                                    const newNotes = notes.map(n => n.id === id ? { ...n, ...props } : n);
-                                    addToHistory(newNotes);
-                                }}
+                                updateNote={updateNote}
                                 canvasDimensions={canvasDimensions}
                                 onDelete={deleteNote}
                                 onDuplicate={duplicateNote}
