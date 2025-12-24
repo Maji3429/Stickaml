@@ -4,6 +4,10 @@
   --background: #ffffff;
   --foreground: #171717;
   --sticky-yellow: #fffb88;
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  --canvas-bg: #f8f9fa;
 }
 
 @theme inline {
@@ -21,6 +25,7 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --canvas-bg: #1a1a1a;
   }
 }
 
@@ -29,6 +34,11 @@ body {
   color: var(--foreground);
   /* 基本フォントをNoto Sans JPを含むフォントスタックに変更 */
   font-family: var(--font-jp);
+}
+
+/* Smooth transitions for all elements */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 /* YAMLプレビュー用のスタイル */
@@ -72,9 +82,129 @@ option {
 
 .dropdown:hover .dropdown-content {
   display: block;
+  animation: fadeInDown 0.2s ease;
 }
 
 .dropdown-content {
   z-index: 1000;
   min-width: 160px;
+}
+
+/* Animations */
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Button hover effects */
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+button:not(:disabled):active {
+  transform: translateY(0);
+}
+
+/* Sticky note animations */
+.sticky-note-enter {
+  animation: scaleIn 0.3s ease;
+}
+
+/* Toast notification styles */
+.toast-notification {
+  animation: slideInRight 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Improved scroll bar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Gradient button styles */
+.btn-gradient-primary {
+  background: var(--primary-gradient);
+  transition: all 0.3s ease;
+}
+
+.btn-gradient-primary:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-gradient-secondary {
+  background: var(--secondary-gradient);
+  transition: all 0.3s ease;
+}
+
+.btn-gradient-secondary:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 20px rgba(240, 147, 251, 0.4);
+}
+
+.btn-gradient-success {
+  background: var(--success-gradient);
+  transition: all 0.3s ease;
+}
+
+.btn-gradient-success:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 20px rgba(79, 172, 254, 0.4);
 }
